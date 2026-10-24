@@ -376,14 +376,22 @@ with tab_real_video:
         video_source = st.radio(
             "Choose Video Source:",
             [
-                "Use Sample Real Construction Clip (sample_construction_clip.mp4)",
+                "Real-Life Construction Site Demo Footage (demo_construction_site.mp4)",
+                "Secondary CHV Job-Site Clip (sample_construction_clip.mp4)",
                 "Upload Custom Video File (.mp4, .avi, .mov)"
             ],
             index=0
         )
         
         video_path = None
-        if video_source == "Use Sample Real Construction Clip (sample_construction_clip.mp4)":
+        if video_source == "Real-Life Construction Site Demo Footage (demo_construction_site.mp4)":
+            if os.path.exists("demo_construction_site.mp4"):
+                video_path = "demo_construction_site.mp4"
+            elif os.path.exists("19241051-hd_1920_1080_30fps.mp4"):
+                video_path = "19241051-hd_1920_1080_30fps.mp4"
+            else:
+                st.warning("Demo video not found on disk.")
+        elif video_source == "Secondary CHV Job-Site Clip (sample_construction_clip.mp4)":
             if os.path.exists("sample_construction_clip.mp4"):
                 video_path = "sample_construction_clip.mp4"
             else:
@@ -396,18 +404,19 @@ with tab_real_video:
                     f.write(uploaded_file.getbuffer())
                 video_path = temp_path
 
-        max_frames = st.slider("Max Frames to Process", min_value=5, max_value=60, value=20, step=5)
+        max_frames = st.slider("Max Frames to Process", min_value=10, max_value=150, value=50, step=10)
         frame_stride = st.selectbox(
             "Frame Stride (Skip rate)",
             options=[1, 2, 3],
-            index=0,
-            help="Process every 1st, 2nd, or 3rd frame to accelerate inference"
+            index=1,
+            help="Process every 1st, 2nd, or 3rd frame (Stride 2 gives ~15 FPS analysis)"
         )
         
         start_processing = st.button("▶️ Run Real-Life Video Inference", type="primary", disabled=(not video_path))
         
     with col_v_info:
         if video_path and os.path.exists(video_path):
+            st.video(video_path)
             cap_info = cv2.VideoCapture(video_path)
             total_f = int(cap_info.get(cv2.CAP_PROP_FRAME_COUNT))
             fps_v = cap_info.get(cv2.CAP_PROP_FPS) or 25.0
