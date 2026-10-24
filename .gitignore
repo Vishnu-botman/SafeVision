@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb_checkpoints
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Datasets & Large Archives (>100MB exceeds GitHub push limits)
+CHV_dataset/
+VOC2028/
+VOC2028.zip
+instances_val/
+instances_test/
+instances_test.rar
+chv_yolo/
+shwd_yolo/
+
+# Training runs & logs
+runs/
+*.log
+
+# Operating system / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.agents/

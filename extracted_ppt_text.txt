@@ -1,0 +1,927 @@
+=== Slide 1 ===
+Context-Aware PPE and Worker–Machinery Proximity Monitoring
+Object Detection, Tracking and Temporal Risk Scoring
+Lerin Liju (AM.SC.U4AIE24029)
+Vishnu (AM.SC.U4AIE24058)
+Jeevan Krishna (AM.SC.U4AIE24059)
+S5 B.Tech Computer Science and Engineering (Artificial Intelligence)
+Deep Learning Project Proposal
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+1 / 33
+
+
+=== Slide 2 ===
+Problem Statement & Motivation
+Problem statement
+Existing camera-based safety systems detect workers, machinery, helmets and vests as separate objects
+in individual frames. A helmet appearing in the frame does not prove that every worker is wearing one,
+and a person near a machine is not automatically in danger. These systems often lack worker-level PPE
+association, cabin-operator context and persistent proximity analysis across video frames.
+▶PPE-only alerts ignore machinery motion and worker location.
+▶A person visible inside a crane or excavator cabin may trigger a false proximity warning.
+▶A brief zone crossing and prolonged exposure should not receive the same risk level.
+▶Repeated false alarms reduce trust and can cause safety staff to ignore genuine warnings.
+Project motivation
+Convert frame-level detections into worker-specific, explainable safety events that use visual proximity,
+machinery motion, PPE status and exposure duration.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+2 / 33
+
+
+=== Slide 3 ===
+Who is affected?
+▶Construction workers: face direct exposure to moving machinery and may also work without correctly
+detected PPE.
+▶Machine operators: can trigger false proximity alarms when a camera sees them inside an excavator, crane
+or other cabin.
+▶Site supervisors and safety officers: must inspect repeated alerts and can suffer alert fatigue when
+warnings lack context.
+▶Visitors and subcontractors: may enter restricted work areas without understanding local machinery
+hazards.
+▶Contractors and project owners: carry operational, legal and financial consequences when preventable
+incidents occur.
+▶Workers’ families and nearby communities: bear the long-term human impact of serious workplace
+injuries and fatalities.
+Direct user of the system
+The immediate user is the site safety team, which receives worker-specific, explainable alerts instead of raw
+detection boxes.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+3 / 33
+
+
+=== Slide 4 ===
+Why Deep Learning?
+Tasks that require learned visual features
+▶Detect workers across scale, pose and partial
+occlusion
+▶Recognise visually different machinery categories
+▶Detect small helmets and safety vests under
+changing illumination
+▶Generalise beyond fixed colour and shape
+thresholds
+Tasks handled by explicit system logic
+▶ByteTrack maintains temporary video identities
+▶Geometry associates PPE with worker regions
+▶Trajectories estimate machinery motion and
+exposure duration
+▶Temporal rules calculate and stabilise risk alerts
+Scope distinction
+Deep learning performs visual detection. Tracking, association and risk scoring form a transparent decision layer
+rather than another unverified neural model.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+4 / 33
+
+
+=== Slide 5 ===
+Practical / Technical Relevance
+Practical relevance
+▶Works with recorded footage or existing
+monocular CCTV feeds
+▶Provides the reason and duration behind every
+warning
+▶Reduces cabin-operator and one-frame false
+alarms
+▶Creates structured event logs for review and audit
+▶Supports human safety staff; it does not replace
+them
+Technical relevance
+▶Two specialised detectors trained from random
+initialisation
+▶Frame-level fusion followed by multi-object
+tracking
+▶Worker-specific PPE association with temporal
+voting
+▶Motion-adaptive danger zones in image space
+▶Event-level evaluation against a fixed-zone
+baseline
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+5 / 33
+
+
+=== Slide 6 ===
+Background / Problem Context
+▶Published construction-safety work has established that modern object detectors can recognise workers,
+helmets, vests and machinery.
+▶Most benchmarks still score individual images using precision, recall and mean average precision.
+▶A site-safety decision requires additional context: which PPE belongs to which person, whether machinery
+is moving, and how long the worker remains exposed.
+▶A visible person near a machine is not always unsafe. A confirmed operator inside a cabin must be treated
+differently from an external pedestrian.
+▶A short accidental detection should not create the same alert as a persistent worker–machinery interaction.
+▶SafeVision therefore focuses on the transition from frame-level object detection to worker-specific temporal
+risk events.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+6 / 33
+
+
+=== Slide 7 ===
+The actual problem being solved
+Input
+▶Recorded or live monocular construction-site
+video
+▶Multiple workers and machines
+▶Occlusion, small PPE objects and changing
+illumination
+Required reasoning
+▶Detect workers, relevant machinery and PPE
+▶Maintain temporary identities across frames
+▶Associate detected PPE with the correct worker
+▶Separate external workers from confirmed cabin
+operators
+Output
+▶Annotated video with worker and machine IDs
+▶PPE status for every tracked worker
+▶Relative danger-zone state and exposure
+duration
+▶Risk level with a human-readable reason
+▶Event log containing start time, end time and
+severity
+Boundary of the claim
+The system estimates relative risk in image space. An
+uncalibrated single camera cannot provide dependable
+real-world distance in metres.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+7 / 33
+
+
+=== Slide 8 ===
+Dataset inventory and sample images
+MOCS
+41,668 images, 13 moving-object
+classes. Used for workers and
+machinery.
+SH17
+8,099 images, 75,994 instances,
+17 PPE and body-part classes.
+CHV
+1,330 selected images with
+person, vest and helmet-colour
+annotations.
+SHWD
+7,581 images with
+helmet-wearing and normal-head
+annotations.
+Final allocation: MOCS trains the worker and machinery scene detector. SH17, CHV and SHWD train the PPE detector after class-label
+harmonisation.
+Source: An et al. (2021); Ahmad and Rahimi (2024); Wang et al. (2021); official SHWD repository.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+8 / 33
+
+
+=== Slide 9 ===
+Dataset Characteristics
+Dataset
+Data type
+Useful labels
+Problem characteristics
+MOCS
+Real construction-site
+images
+Workers and multiple moving-machine cate-
+gories
+Large scene variation, occlusion, scale differ-
+ences and crowded backgrounds
+SH17
+Internet-sourced
+in-
+dustrial images
+Person, head, helmet, safety vest and other
+PPE/body parts
+Severe class imbalance; many annotations
+occupy less than 1% of the image
+CHV
+Quality-filtered
+con-
+struction PPE images
+Person, vest and four helmet colours
+Construction-specific but small; helmet
+colours require label remapping
+SHWD
+Web
+and
+head-
+detection images
+Helmet and normal head
+Helmet-focused only; no vest, machinery,
+tracking or risk-event labels
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+9 / 33
+
+
+=== Slide 10 ===
+Existing Limitations
+▶Frame-only decisions: a single incorrect detection can create an immediate warning.
+▶No worker-specific PPE relationship: detecting one helmet and two workers does not reveal who is
+protected.
+▶No operator context: a person inside a machinery cabin can be classified as an external worker in danger.
+▶Static danger zones: fixed rectangles or circles do not respond to observed machinery motion.
+▶No exposure measurement: brief entry and prolonged proximity receive the same treatment.
+▶Weak cross-domain performance: PPE accuracy drops when lighting, camera viewpoint or workplace
+type changes.
+▶Incomplete datasets: selected datasets contain object boxes, but not complete worker–PPE–machine
+risk-event annotations.
+▶Unclear alert quality: many studies report mAP but omit false alerts per hour and event-level recall.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+10 / 33
+
+
+=== Slide 11 ===
+Key Concepts Used in the Project
+Concept
+Role in SafeVision
+Object detection
+Predicts a class, confidence score and bounding box for each worker, machine or PPE item.
+Training from random initial-
+isation
+Learns detector weights from the selected datasets without importing pretrained detector weights.
+Label harmonisation
+Maps different source labels into consistent scene and PPE class definitions.
+IoU and non-maximum sup-
+pression
+Measure box overlap and remove duplicate detections where the detector requires post-processing.
+ByteTrack
+Links detections across adjacent frames and assigns temporary worker and machine IDs.
+PPE-to-worker association
+Uses head and torso regions plus temporal voting to attach PPE to the most plausible worker.
+Image-space danger zone
+Represents relative proximity around machinery without claiming exact distance in metres.
+Trajectory and dwell time
+Estimate machine movement and measure how long a tracked worker remains exposed.
+Temporal hysteresis
+Requires persistent evidence before raising or clearing an alert.
+Risk scoring
+Combines proximity, motion, exposure duration and PPE state into an explainable severity level.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+11 / 33
+
+
+=== Slide 12 ===
+How the datasets will be used
+Scene detector
+Source: MOCS
+Purpose: Detect workers and selected machinery
+classes.
+Preparation:
+▶Retain classes required by the safety scenario
+▶Retain and rename the required MOCS classes
+consistently
+▶Keep provenance metadata for every image
+PPE detector
+Sources: SH17, CHV and SHWD
+Purpose: Detect person/head, helmet and safety
+vest.
+Preparation:
+▶Merge helmet-colour labels into one helmet class
+▶Map SHWD hat/person labels to helmet and
+uncovered head
+▶Balance minority PPE classes during sampling
+Why two detectors
+The scene and PPE datasets have different label spaces, object scales and visual distributions. Separate training
+avoids forcing unrelated annotations into one inconsistent model. Their outputs unite on each video frame
+during detection fusion.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+12 / 33
+
+
+=== Slide 13 ===
+Literature Review I
+Study
+Problem and dataset
+Method and key result
+Limitation for SafeVision
+An et al.
+(2021),
+MOCS
+Construction worker and machin-
+ery detection; 41,668 images from
+174 sites
+Benchmarked 15 deep detectors
+and established a construction-
+object benchmark
+Frame-level objects only; no PPE
+association, tracking, proximity
+events or duration
+Wang et al. (2021),
+CHV
+Fast construction PPE detection;
+1,330 selected images
+YOLOv5x reported 86.55% mAP;
+YOLOv5s reported 52 FPS on the
+authors’ GPU
+Small dataset; detects appearance
+only and does not model machin-
+ery interaction
+Ahmad and Rahimi
+(2024), SH17
+PPE detection across manufactur-
+ing environments; 8,099 images
+and 17 classes
+YOLOv9-e reached 70.9%
+mAP@0.5 and 48.7%
+mAP@0.5:0.95
+Used transfer learning; cross-
+domain mAP@0.5 fell to about
+58.9%; no temporal association
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+13 / 33
+
+
+=== Slide 14 ===
+Literature Review II
+Study
+Problem and dataset
+Method and key result
+Limitation for SafeVision
+Liu
+et
+al.
+(2025),
+SHWD
+Small-helmet detection in heavy-
+machinery factories
+YOLOv10-IYA reported 93.9%
+mAP@0.5 with 7.8 GFLOPs
+Helmet/head only; missed detec-
+tions remain; reported edge speed
+was about 0.9 FPS
+Nath et al.
+(2020),
+Pictor-PPE
+Real-time helmet and vest com-
+pliance
+Compared three YOLOv3-based
+pipelines; unified model reported
+72.3% mAP at 11 FPS
+PPE compliance remains frame
+based; no operator state, ma-
+chinery motion or exposure-time
+reasoning
+Note: The 2025 SHWD paper reports dataset counts that conflict with the official SHWD repository. The official repository should be used for dataset statistics.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+14 / 33
+
+
+=== Slide 15 ===
+Research Gap
+▶Existing studies optimise detection metrics, but site deployment requires accurate safety-event decisions.
+▶Most studies do not measure whether detected PPE belongs to the correct worker.
+▶Frame-level methods cannot distinguish brief crossings from persistent exposure.
+▶A nearby cabin operator and an external pedestrian may receive the same proximity warning.
+▶Fixed image-space danger zones ignore observed machine movement.
+▶Existing datasets do not directly contain complete worker–PPE–machine event annotations.
+▶Cross-domain performance drops when models move between construction and manufacturing imagery.
+▶Few studies report false alerts per hour, event recall or alert delay.
+Gap addressed by this project
+An integrated video pipeline that converts two independent detectors into worker-specific, operator-aware and
+temporally stable risk events.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+15 / 33
+
+
+=== Slide 16 ===
+What is missing?
+Missing from existing systems
+▶Verified PPE ownership for each worker
+▶Cabin-aware handling of machine operators
+▶Danger zones that react to observed movement
+▶Exposure duration and stable event boundaries
+▶Human-readable reasons for every risk alert
+▶Event-level false-alarm evaluation
+Missing from public datasets
+▶Unified scene, PPE and temporal-risk labels
+▶Persistent worker and machine track IDs
+▶Cabin-operator annotations
+▶Ground-truth danger-zone entry intervals
+▶Calibrated real-world distance labels
+▶Enough site diversity for guaranteed deployment
+Project response
+Use large public object datasets for detector training and create a smaller, manually annotated video benchmark
+for system-level event evaluation.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+16 / 33
+
+
+=== Slide 17 ===
+Project Objectives
+1
+Prepare the required MOCS classes and train a worker and machinery detector from random initialisation.
+2
+Build a harmonised PPE dataset from SH17, CHV and SHWD and train a second detector from random
+initialisation.
+3
+Track workers and machinery across frames and associate helmet and vest detections with the correct
+tracked worker.
+4
+distinguish confirmed cabin operators, external workers and uncertain cases without using facial recognition.
+5
+Estimate image-space machine motion and construct an adaptive danger zone around each tracked
+machine.
+6
+Generate explainable risk events using proximity, motion, PPE status and exposure duration.
+7
+Compare the complete system with a fixed-zone, single-frame baseline.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+17 / 33
+
+
+=== Slide 18 ===
+Proposed Solution / Methodology
+1
+Prepare MOCS for worker and machinery detection. Harmonise SH17, CHV and SHWD for person/head,
+helmet and safety-vest detection.
+2
+Train two specialised YOLO-style detectors from random initialisation and select checkpoints using
+validation performance.
+3
+Run both detectors on every video frame and fuse their outputs without merging the two training label
+spaces.
+4
+Use ByteTrack to maintain worker and machinery IDs, trajectories and exposure histories.
+5
+Associate helmet and vest detections with worker head and torso regions, then stabilise the result across
+several frames.
+6
+Estimate machinery movement, classify cabin/external/uncertain worker context and construct adaptive
+image-space danger zones.
+7
+Accumulate risk from zone occupancy, motion, PPE state and duration. Apply persistence and hysteresis
+before creating an alert.
+8
+Produce annotated video, explainable alerts and a structured event log.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+18 / 33
+
+
+=== Slide 19 ===
+Model-development workflow
+MOCS
+scene data
+Audit, filter and
+standardise labels
+Site-aware split
+augment
+training only
+Train scene detector
+random initialisation
+Validate and save
+scene weights
+SH17, CHV
+and SHWD
+PPE data
+Deduplicate and
+harmonise classes
+Source-aware split
+augment
+training only
+Train PPE detector
+random initialisation
+Validate and save
+PPE weights
+Training output
+The saved scene and PPE weights enter the video-inference pipeline. The test sets remain untouched
+until final model evaluation.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+19 / 33
+
+
+=== Slide 20 ===
+Complete video-inference architecture
+Live or recorded video
+Frame extraction, resiz-
+ing and normalisation
+Scene detector
+worker and ma-
+chinery boxes
+PPE detector
+head, helmet
+and vest boxes
+Frame-level de-
+tection fusion
+ByteTrack IDs,
+trajectories and
+machine motion
+Context analysis
+PPE-to-worker association and temporal voting
+adaptive danger zone, cabin state and exposure duration
+Temporal risk scoring
+persistence and hysteresis
+Annotated video
+explainable alert
+and event log
+The two detectors unite after inference. Tracking and context logic convert their boxes into worker-specific, time-based safety events.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+20 / 33
+
+
+=== Slide 21 ===
+Preprocessing and augmentation pipeline
+Data preparation
+1
+Verify labels, licences and corrupt files.
+2
+Preserve source and site/video provenance.
+3
+Remove exact and near duplicates.
+4
+Harmonise class names separately for each
+detector.
+5
+Split by site, source or video before augmentation.
+6
+Resize with letterboxing to the selected input size.
+Training-only augmentation
+▶Horizontal flip where direction does not change
+the label
+▶Controlled brightness, contrast and colour
+changes
+▶Mild blur and image noise
+▶Scale, translation and limited crop
+▶Mosaic during the early training stage
+▶Class-aware sampling for rare PPE classes
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+21 / 33
+
+
+=== Slide 22 ===
+Deep learning detection core
+Model A: scene detector
+▶YOLO-style detector architecture
+▶Randomly initialised weights
+▶Trained on the selected MOCS worker and
+machinery classes
+▶Outputs class, confidence and bounding box for
+workers and machinery
+Model B: PPE detector
+▶Same detector family with a separate
+classification head
+▶Randomly initialised weights
+▶Trained on harmonised SH17 and CHV data
+▶Outputs person/head, helmet and safety-vest
+detections
+Training objective: optimise localisation, classification and distribution-focal losses using only training images.
+Select checkpoints using validation mAP and class-level recall.
+Segmentation scope correction
+The selected datasets mainly provide bounding boxes, not pixel masks. Therefore the feasible core is object
+detection. Instance segmentation becomes an optional extension only if the team creates reliable mask
+annotations.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+22 / 33
+
+
+=== Slide 23 ===
+Tracking, fusion and PPE association
+1
+Apply both detectors to the same frame.
+2
+Filter low-confidence and duplicate detections using class-specific thresholds and non-maximum suppression
+where required.
+3
+Send worker and machinery boxes to ByteTrack, which assigns temporary IDs and matches them across
+adjacent frames.
+4
+Assign each helmet to the worker whose upper-body region contains it with the strongest geometric
+agreement.
+5
+Assign each vest to the worker whose torso region contains it.
+6
+Use temporal voting across several frames to reduce one-frame PPE errors caused by occlusion.
+7
+Mark competing or weak associations as uncertain; do not force every PPE item onto a worker.
+Meaning of identity
+Worker 01 and Worker 02 are temporary tracking IDs within one video. The system does not recognise real
+people and does not need the same individuals to appear in the training datasets.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+23 / 33
+
+
+=== Slide 24 ===
+Operator-aware adaptive temporal risk engine
+For tracked worker i at time t, the prototype computes
+Ri(t) = Gi(t) [wzZi(t) + wmMi(t) + wτTi(t) + wpPi(t)] ,
+where Z represents danger-zone occupancy, M represents observed machinery motion or approach, T represents
+exposure duration, and P represents PPE non-compliance.
+▶Gi(t) applies operator context. A confirmed cabin operator suppresses the external-pedestrian proximity
+alert.
+▶An uncertain cabin state never receives automatic safe status.
+▶The danger zone expands in the observed direction of machine movement.
+▶Risk accumulates during continued exposure and decays after the worker returns to a safe state.
+▶Hysteresis requires persistence before raising or clearing an alert.
+Calibration
+The weights and thresholds are engineering parameters, not legal safety distances. Tune them on annotated
+validation videos and report their sensitivity.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+24 / 33
+
+
+=== Slide 25 ===
+Novelty
+Primary contribution
+An operator-aware adaptive temporal risk engine that converts detections into worker-specific safety events.
+▶Two from-scratch detectors specialised for scene objects and small PPE objects, followed by explicit
+detection fusion.
+▶Worker-specific PPE association instead of scene-level PPE counting.
+▶Conservative separation of cabin operators, external workers and uncertain cases.
+▶Motion-adaptive image-space danger zones rather than one fixed radius.
+▶Exposure-time accumulation and temporal hysteresis to reduce unstable one-frame alerts.
+▶Explainable event output containing the worker ID, machine ID, detected causes, exposure duration and
+risk level.
+▶Ablation against a fixed-zone, single-frame baseline to measure whether the proposed context actually
+reduces false alerts.
+Not claimed as novelty: the YOLO architecture, ByteTrack, or standard augmentations. The contribution lies in the
+integration and its event-level evaluation.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+25 / 33
+
+
+=== Slide 26 ===
+Dataset & Experimental Setup
+Component
+Data and configuration
+Experimental rule
+Scene detector
+MOCS; selected worker and
+machinery classes
+Use official splits when suitable; otherwise split by construction site to
+prevent scene leakage
+PPE detector
+SH17, CHV and SHWD; per-
+son/head,
+helmet and vest
+classes
+Deduplicate across sources; merge helmet colours; keep uncovered-head
+evidence only when labels are compatible
+Input processing
+Proposed detector input of
+640 × 640 with letterboxing
+Apply normalisation consistently; augmentation belongs to the training split
+only
+Training condition
+YOLO-style
+detectors
+with
+random initialisation
+Train models independently; use validation data for checkpoint and thresh-
+old selection
+Tracking and context
+Recorded construction videos
+with worker and machinery
+motion
+ByteTrack requires detections but no task-specific model training
+System benchmark
+Approximately
+30–50
+short
+clips annotated with safe and
+unsafe interactions
+Include cabin operators, external workers, brief crossings, persistent expo-
+sure, PPE variation and occlusion
+Hardware
+Available GPU for training
+and video demonstration
+Report GPU model, batch size, inference resolution, FPS and end-to-end
+latency
+Exact split counts and class totals must be reported only after the final downloaded datasets pass the audit and
+deduplication stage.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+26 / 33
+
+
+=== Slide 27 ===
+Dataset Preparation Status
+Dataset
+Current decision
+Required preparation
+Completion evidence
+MOCS
+Selected for the scene
+detector
+Obtain authorised copy, retain required
+classes, inspect annotations and group
+splits by site
+Final image/class counts and split manifest
+SH17
+Selected for the PPE
+detector
+Download through official links, verify files,
+retain relevant PPE classes and measure
+imbalance
+Cleaned annotations and class-frequency
+report
+CHV
+Selected for the PPE
+detector
+Verify 1,330 images, merge helmet colours
+and inspect overlap with other sources
+Duplicate report and harmonised labels
+SHWD
+Selected
+for
+hel-
+met/head coverage
+Use official repository statistics, verify
+labels and map hat/person carefully
+Mapping document and manual sample
+audit
+Video
+bench-
+mark
+Required
+for
+event
+evaluation
+Collect permitted short clips and annotate
+track IDs, cabin state, zone intervals, PPE
+state and event boundaries
+Versioned annotation export and test
+protocol
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+27 / 33
+
+
+=== Slide 28 ===
+Work Plan
+1
+Audit dataset access, licences, annotations and class distributions.
+2
+Define the final scene and PPE class ontologies.
+3
+Remove duplicates and create leakage-resistant data splits.
+4
+Train and evaluate the scene detector from random initialisation.
+5
+Train and evaluate the PPE detector from random initialisation.
+6
+Integrate both detectors with ByteTrack and detection fusion.
+7
+Implement PPE-to-worker association and temporal voting.
+8
+Implement cabin-operator handling and adaptive machine danger zones.
+9
+Build the temporal risk engine and structured event log.
+10 Annotate a small system-level video benchmark containing safe and unsafe interactions.
+11 Compare the baseline and proposed systems using event-level metrics.
+12 Package the demonstration, results, limitations and reproducibility files.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+28 / 33
+
+
+=== Slide 29 ===
+Expected Outcomes & Evaluation Plan
+Component
+Expected output
+Evaluation criteria
+Scene detector
+Worker and machinery boxes with confidence scores
+mAP@0.5, mAP@0.5:0.95, per-class precision, recall
+and confusion matrix
+PPE detector
+Person/head, helmet and vest boxes
+Same detection metrics, with separate reporting for
+small and occluded PPE
+Tracking
+Stable worker and machine IDs within each video
+IDF1, ID switches, track fragmentation and qualita-
+tive failure cases
+PPE association
+PPE status attached to each tracked worker
+Association accuracy/F1 and incorrect-assignment
+rate
+Context engine
+Cabin-operator state and adaptive danger zone
+Operator-state accuracy and cabin-related false
+alerts
+Risk engine
+Warning/critical events with reasons and duration
+Event precision, recall, F1, missed-event rate, false
+alerts/hour and alert delay
+Complete system
+Annotated video and structured event log
+End-to-end FPS, latency and resource usage
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+29 / 33
+
+
+=== Slide 30 ===
+Software Stack and Reproducibility
+Datasets
+▶MOCS: workers and construction machinery
+▶SH17: PPE and body-part annotations
+▶CHV: construction helmets and safety vests
+▶SHWD: helmet-wearing and uncovered-head
+data
+▶Small custom video evaluation set for temporal
+events
+Software stack
+▶Python and PyTorch
+▶YOLO detector implementation with random
+initialisation
+▶OpenCV for video processing and geometry
+▶ByteTrack for multi-object tracking
+▶CVAT or Roboflow for annotation review
+▶NumPy, pandas and scikit-learn for evaluation
+▶Streamlit for the optional demonstration
+interface
+▶Git and GitHub for version control and
+reproducibility
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+30 / 33
+
+
+=== Slide 31 ===
+References I
+X. An, L. Zhou, Z. Liu, C. Wang, P. Li, and X. Li, “Dataset and benchmark for detecting moving objects in construction sites,” Automation in Construction, vol. 122, 103482, 2021.
+H. M. Ahmad and A. Rahimi, “SH17: A dataset for human safety and personal protective equipment detection in manufacturing industry,” arXiv:2407.04590, 2024.
+Z. Wang, Y. Wu, L. Yang, A. Thirunavukarasu, C. Evison, and Y. Zhao, “Fast personal protective equipment detection for real construction sites using deep learning approaches,” Sensors,
+vol. 21, no. 10, 3478, 2021.
+N. D. Nath, A. H. Behzadan, and S. G. Paal, “Deep learning for site safety: Real-time detection of personal protective equipment,” Automation in Construction, vol. 112, 103085, 2020.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+31 / 33
+
+
+=== Slide 32 ===
+References II
+B. Liu, X. Wei, and Q. Chen, “Safety helmet detection methods in heavy machinery factory,” Scientific Reports, vol. 15, 18565, 2025.
+Y. Zhang et al., “ByteTrack: Multi-object tracking by associating every detection box,” in European Conference on Computer Vision, 2022.
+J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, “You Only Look Once: Unified, real-time object detection,” in IEEE Conference on Computer Vision and Pattern Recognition, 2016.
+NJVisionPower, “Safety Helmet Wearing Dataset,” official dataset repository.
+https://github.com/njvisionpower/Safety-Helmet-Wearing-Dataset
+Ultralytics, “Ultralytics YOLO documentation and software repository.”
+https://github.com/ultralytics/ultralytics
+Dataset pages and access conditions should be recorded in the final reproducibility appendix.
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+32 / 33
+
+
+=== Slide 33 ===
+Thank You
+Questions and discussion
+Lerin, Vishnu, Jeevan (S5 B.Tech Computer Science and Engineering (Artificial Intelligence))
+SafeVision
+Deep Learning Project Proposal
+33 / 33
+
+

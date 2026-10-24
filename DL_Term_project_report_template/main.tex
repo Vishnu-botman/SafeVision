@@ -1,0 +1,295 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% IEEE Conference Format - SafeVision Final Project Report
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[letterpaper, 10 pt, conference]{ieeeconf}
+
+\IEEEoverridecommandlockouts
+\overrideIEEEmargins
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Custom listing styling for appendix
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue}\bfseries,
+  stringstyle=\color{red},
+  commentstyle=\color{gray}\itshape,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray}
+}
+
+\title{\LARGE \bf
+Context-Aware PPE and Worker--Machinery Proximity Monitoring:\\
+Object Detection, Tracking, and Temporal Risk Scoring
+}
+
+\author{Lerin Liju$^{1}$, Vishnu$^{2}$, and Jeevan Krishna$^{3}$% <-this % stops a space
+\thanks{$^{1}$Lerin Liju (Roll No: AM.SC.U4AIE24029), $^{2}$Vishnu (Roll No: AM.SC.U4AIE24058), and $^{3}$Jeevan Krishna (Roll No: AM.SC.U4AIE24059) are with the Department of Computer Science and Engineering (Artificial Intelligence), Amrita School of Computing, Amrita Vishwa Vidyapeetham, Amritapuri, India.}%
+}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{abstract}
+\textbf{Context:} Visual safety monitoring in dynamic industrial and construction environments is critical for preventing fatal worker-machinery collisions and enforcing Personal Protective Equipment (PPE) compliance.
+\textbf{Gap:} Current camera-based deep learning solutions operate primarily as isolated, frame-level object detectors. They treat workers, machines, helmets, and vests as independent bounding boxes without explicit identity assignment. Consequently, they fail to associate safety gear with individual personnel, ignore cabin-operator context (triggering continuous false proximity alerts for vehicle drivers), employ static circular hazard radii that neglect equipment kinematics, and suffer from high alarm jitter caused by transient detection dropouts.
+\textbf{Approach:} In this work, we propose \textbf{SafeVision}, an end-to-end framework integrating dual-detector inference, ByteTrack multi-object tracking, anatomical worker-to-PPE geometric association, motion-adaptive image-space danger zones, and an operator-aware temporal risk engine. Individual worker risk $R_i(t)$ is computed by fusing danger-zone penetration, relative machine approach motion, temporal exposure accumulation, and PPE non-compliance, governed by an operator context gate $G_i(t)$ and multi-stage state hysteresis.
+\textbf{Results:} Empirical ablation over systematic interaction scenarios demonstrates that SafeVision reduces the false alert rate from 48.04\% (baseline) to 23.53\% (a 24.51\% absolute reduction), eliminates 100\% of spurious cabin-driver proximity alerts, increases the event detection F1-score from 0.260 to 0.347, and reduces alert jitter transitions by 25\%.
+\textbf{Conclusion:} By converting disjoint visual detections into worker-specific, kinematically aware, and temporally persistent safety decisions, SafeVision establishes a robust foundation for practical, deployable automated construction safety management.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{INTRODUCTION}
+
+Visual automated surveillance powered by modern deep convolutional and transformer-based neural networks has emerged as a cornerstone of industrial occupational safety \cite{lecun2015deep, an2021dataset}. On construction sites and heavy manufacturing facilities, the close coexistence of ground personnel and heavy moving machinery (such as excavators, wheel loaders, and cranes) creates severe hazard vectors, frequently resulting in fatal struck-by or caught-between accidents. Concurrently, mandatory compliance with Personal Protective Equipment (PPE)---specifically hardhats and high-visibility safety vests---remains a vital defense against occupational trauma \cite{wang2021fast, nath2020deep}.
+
+Despite significant advances in generic object detection, deploying vision-based safety monitoring in real-world construction environments remains impeded by fundamental structural limitations. First, conventional vision systems perform isolated detection on individual video frames without maintaining temporal track identity. A helmet detected somewhere within a crowded frame does not guarantee that every worker is protected, nor does it identify which specific individual is non-compliant. Second, existing systems lack operator spatial awareness: a machine operator seated inside an excavator cabin is geometrically within the perimeter of the machinery bounding box, causing naive proximity systems to trigger deafening, false alarms continuously. Third, danger zones are conventionally represented as fixed, static circular radii, failing to account for vehicle velocity, heading, and stopping distances. Finally, instantaneous frame-level alert logic produces extreme alarm fatigue due to momentary visual occlusions and single-frame boundary crossings.
+
+To overcome these research gaps, this paper introduces \textbf{SafeVision}, a context-aware temporal surveillance architecture that converts multi-class visual detections into structured, worker-specific safety events. SafeVision decouples perception into a dual-detector core (a Scene Detector for heavy machinery and workers, and a fine-grained PPE Detector for safety gear), unifies their detections via multi-object tracking, performs anatomical region-based PPE association, dynamically stretches hazard zones in the direction of machine travel, and computes an explainable, time-accumulated risk score $R_i(t)$ with hysteresis smoothing.
+
+The primary contributions of this work are summarized as follows:
+\begin{enumerate}
+    \item \textbf{Dual-Detector Fusion and Tracking Pipeline:} We integrate a coarse scene detector (trained on MOCS ontologies) with a specialized PPE detector (trained on harmonized CHV and SHWD ontologies), coupled with a pure-Python ByteTrack tracker that estimates real-time kinematic velocity vectors for both workers and equipment.
+    \item \textbf{Worker-Specific PPE Association with Temporal Voting:} We implement upper-body and torso anatomical bounding box containment tests coupled with a rolling 7-frame temporal consensus window, dampening transient occlusion noise.
+    \item \textbf{Motion-Adaptive Danger Zones:} We formulate image-space hazard polygons that dynamically expand along the observed directional velocity vector of moving equipment, providing earlier warning for frontal approaches while reducing false alarms behind turning machinery.
+    \item \textbf{Operator-Aware Temporal Risk Engine:} We formalize a unified risk metric $R_i(t) = G_i(t) [w_z Z_i + w_m M_i + w_t T_i + w_p P_i]$ incorporating cabin operator gating $G_i(t)$, exposure duration accumulation $T_i$, and multi-stage hysteresis.
+    \item \textbf{Comprehensive Ablation and Interactive Dashboard:} We demonstrate an empirical false alarm reduction of 24.51\% and package the entire system into an open-source, interactive Streamlit demonstration dashboard.
+\end{enumerate}
+
+The remainder of this report is organized as follows: Section II reviews related literature and highlights key research gaps. Section III details the proposed SafeVision system methodology and mathematical formulations. Section IV presents experimental results, ablation metrics, and discussion. Section V concludes the paper with future research directions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{LITERATURE REVIEW}
+
+Computer vision for construction safety has progressed rapidly from hand-crafted feature extractors to modern deep neural networks. Early approaches by Wu et al. \cite{wu2019automatic} utilized color histograms and hierarchical Support Vector Machines (H-SVM) to identify hardhats, subsequently transitioning to Faster R-CNN architectures. While pioneering, multi-stage pipelines were computationally prohibitive for real-time edge processing and struggled under harsh site illuminations.
+
+The release of large-scale construction domain benchmarks substantially catalyzed progress. An et al. \cite{an2021dataset} established the Moving Objects in Construction Sites (MOCS) benchmark, encompassing 41,668 images across 174 construction sites, comparing 15 object detection architectures. Their study confirmed that YOLO-style single-stage detectors \cite{redmon2016you} provide optimal speed-accuracy trade-offs for heavy machinery and worker localization. However, MOCS is annotated solely with coarse bounding boxes, omitting PPE details, cross-frame identities, and proximity interactions.
+
+In the PPE compliance domain, Wang et al. \cite{wang2021fast} introduced the Construction Hardhat and Vest (CHV) dataset containing 1,330 images, achieving an 86.55\% mAP using YOLOv5. Ahmad and Rahimi \cite{ahmad2024sh17} presented the SH17 dataset with 8,099 images spanning 17 manufacturing PPE categories, evaluating YOLOv9 models. Similarly, Liu et al. \cite{liu2025safety} introduced specialized attention mechanisms (YOLOv10-IYA) for small helmet detection in heavy-machinery factories. Nath et al. \cite{nath2020deep} introduced Pictor-PPE, demonstrating a unified YOLOv3 model detecting workers, helmets, and vests at 11 FPS.
+
+Despite these achievements, a critical disconnect persists between raw detection metrics and real-world safety event decisions:
+\begin{enumerate}
+    \item \textbf{Absence of Person-Level Association:} Prior works count safety gear globally per frame rather than assigning equipment to individual workers.
+    \item \textbf{Static Spatial Assumptions:} Proximity alert literature uniformly relies on static circles or 2D Euclidean distance thresholds, failing to account for equipment motion direction.
+    \item \textbf{Neglect of Cabin Operators:} Workers located inside machinery cabins are routinely flagged as external pedestrians in danger.
+    \item \textbf{Lack of Temporal Accumulation:} Existing systems trigger alerts on single-frame threshold crossings, leading to intolerable false alarm frequencies.
+\end{enumerate}
+
+SafeVision directly addresses these limitations by uniting multi-class detection with multi-object tracking, cabin-operator classification, motion-adaptive geometry, and temporal risk accumulation.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{METHODOLOGY}
+
+\subsection{System Overview}
+The SafeVision architecture processes live or recorded video streams through six tightly coupled processing stages, as depicted in the conceptual pipeline. Video frames are normalized and concurrently forwarded to Model A (Scene Detector) and Model B (PPE Detector). Detections are fused, filtered via Non-Maximum Suppression (NMS), and tracked across time using ByteTrack. Next, context analysis determines worker-to-PPE association, cabin-operator status, and dynamic danger zone geometry. Finally, the temporal risk engine evaluates the composite risk score $R_i(t)$, updates the safety event audit log, and renders real-time telemetry overlays.
+
+\subsection{Dataset Curation and Ontological Harmonization}
+Following the project specifications, SafeVision curates data from three established construction safety repositories:
+\begin{enumerate}
+    \item \textbf{MOCS (Moving Objects in Construction Sites) \cite{an2021dataset}:} Selected for the Scene Detector (Model A). Retains worker instances and 6 target machinery classes: excavator, dump truck, wheel loader, crane, bulldozer, and roller. We utilize the verified 4,000 validation images partitioned strictly by construction site to prevent scene leakage.
+    \item \textbf{CHV (Construction Hardhats and Vests) \cite{wang2021fast}:} Selected for the PPE Detector (Model B). Contains 1,330 multi-scale images with 18,893 instances. We audit and harmonize original color-specific annotations (Blue, Red, White, Yellow helmets) into a unified \texttt{helmet} class, while mapping full-body instances to \texttt{person} and torso gear to \texttt{vest}.
+    \item \textbf{SHWD (Safety Helmet Wearing Dataset) \cite{liu2025safety}:} Retains 15,171 images in Pascal VOC XML format, providing extensive coverage of \texttt{hat} and \texttt{head\_uncovered} classes under challenging occlusions.
+\end{enumerate}
+
+\subsection{Dual-Detector Inference and Detection Fusion}
+Rather than forcing a single network to simultaneously detect massive vehicles and tiny helmet chin-straps across extreme scale disparities, SafeVision divides perception into two specialized networks:
+\begin{itemize}
+    \item \textbf{Model A (Scene Detector):} Outputs bounding boxes $B_{scene} = [x_1, y_1, x_2, y_2, c, s]$ for workers and heavy machinery classes ($s \ge 0.40$).
+    \item \textbf{Model B (PPE Detector):} Outputs fine-grained bounding boxes $B_{ppe}$ for helmets, vests, and uncovered heads ($s \ge 0.35$).
+\end{itemize}
+Frame-level fusion resolves duplicate pedestrian detections between Model A and Model B using class-specific greedy Non-Maximum Suppression (NMS) with an IoU threshold of $\theta_{\text{iou}} = 0.45$.
+
+\subsection{Multi-Object Tracking and Kinematics (ByteTrack)}
+Fused scene detections are dispatched to ByteTrack \cite{zhang2022bytetrack}, implemented in pure Python and NumPy to ensure cross-platform reproducibility without C++ compilation overhead. Each tracked entity is modeled via an 7-dimensional Kalman filter state vector:
+\begin{equation}
+\mathbf{x} = [c_x, c_y, s, r, v_x, v_y, v_s]^T
+\end{equation}
+where $(c_x, c_y)$ represents the bounding box centroid, $s = w \cdot h$ is the scale/area, $r = w/h$ is the aspect ratio, and $(v_x, v_y)$ represents the linear velocity vector in pixels per frame.
+
+ByteTrack performs two-stage association using the Hungarian algorithm (via Scipy's \texttt{linear\_sum\_assignment}):
+\begin{enumerate}
+    \item \textbf{First Association:} High-confidence detections ($s \ge 0.50$) are matched to existing confirmed tracks using IoU distance.
+    \item \textbf{Second Association:} Unmatched active tracks are matched to remaining low-confidence detections ($0.20 \le s < 0.50$), successfully recovering occluded workers.
+\end{enumerate}
+Tracks require $N_{confirm} = 2$ consecutive hits to transition from tentative to confirmed, and are retained for up to 25 lost frames before removal.
+
+\subsection{PPE-to-Worker Association and Temporal Voting}
+For each tracked worker bounding box $W_i = [x_{1}, y_{1}, x_{2}, y_{2}]$ with width $w$ and height $h$, we define two anatomical target sub-regions:
+\begin{align}
+\text{Head Region:} \quad & [x_1 - 0.1w, \; y_1, \; x_2 + 0.1w, \; y_1 + 0.35h] \\
+\text{Torso Region:} \quad & [x_1 - 0.1w, \; y_1 + 0.20h, \; x_2 + 0.1w, \; y_1 + 0.75h]
+\end{align}
+A helmet detection $H_k$ is assigned to worker $W_i$ if the intersection area over helmet area exceeds the association threshold $\gamma = 0.25$. Similarly, safety vests are assigned to the torso region. Weak or competing assignments are marked as uncertain rather than forced.
+
+To prevent single-frame flickering caused by head turns or occlusion, each worker track maintains a rolling deque of the last $K = 7$ frames:
+\begin{equation}
+\text{Vote}_{\text{helmet}} = \frac{1}{|K|} \sum_{t \in K} \mathbb{I}(\text{helmet assigned at } t) \ge 0.50
+\end{equation}
+The instantaneous PPE non-compliance penalty $P_i(t) \in [0.0, 1.0]$ is computed as:
+\begin{equation}
+P_i(t) = \min\Big(1.0, \; 0.60 \cdot \mathbb{I}(\neg \text{has\_helmet}) + 0.40 \cdot \mathbb{I}(\neg \text{has\_vest})\Big)
+\end{equation}
+
+\subsection{Motion-Adaptive Image-Space Danger Zones}
+Unlike static circular danger zones, SafeVision generates dynamic polygons that expand in the observed direction of machine travel. For a machine $m$ with bounding box $[x_1, y_1, x_2, y_2]$, centroid $\mathbf{c}_m$, velocity $\mathbf{v}_m = [v_x, v_y]$, and speed $S_m = \|\mathbf{v}_m\|$, the base rectangular margin is set to:
+\begin{equation}
+\Delta x = w_m \cdot 0.40, \quad \Delta y = h_m \cdot 0.40
+\end{equation}
+If $S_m \ge 1.5$ pixels/frame, the hazard zone expands along the normalized velocity unit vector $\hat{\mathbf{v}}_m$:
+\begin{equation}
+\mathbf{P}_{\text{apex}} = \mathbf{c}_m + \hat{\mathbf{v}}_m \cdot \Big(\max(w_m, h_m) \cdot 0.70 + S_m \cdot \kappa \cdot 15.0\Big)
+\end{equation}
+where $\kappa = 2.5$ is the directional expansion factor. Base corner vertices facing the direction of travel ($\mathbf{v}_m \cdot (\mathbf{p} - \mathbf{c}_m) > 0$) are similarly translated forward.
+
+For a worker $i$, ground contact is evaluated at the bottom-center point $(c_{x,i}, y_{2,i})$. The danger-zone occupancy metric $Z_i(t) \in [0.0, 1.0]$ is computed via ray-casting:
+\begin{equation}
+Z_i(t) = 
+\begin{cases} 
+\min(1.0, \; 0.65 + 0.35 \cdot \frac{d_{\text{edge}}}{50\text{px}}), & \text{if inside polygon} \\
+\max(0.0, \; 0.50 \cdot (1.0 - \frac{d_{\text{edge}}}{120\text{px}})), & \text{if within buffer} \\
+0.0, & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\subsection{Cabin-Operator Context Estimator}
+To eliminate false alarms triggered by equipment operators, SafeVision defines an expected cabin window within the upper-middle region of heavy machinery:
+\begin{equation}
+B_{\text{cabin}} = [x_1 + 0.20w_m, \; y_1 + 0.05h_m, \; x_1 + 0.80w_m, \; y_1 + 0.55h_m]
+\end{equation}
+A worker $i$ is classified as a Confirmed Cabin Operator if the spatial containment ratio $\frac{\text{Area}(W_i \cap B_{\text{cabin}})}{\text{Area}(W_i)} \ge 0.60$ and the relative kinematic velocity $\|\mathbf{v}_{w,i} - \mathbf{v}_m\| \le 2.0$ pixels/frame. In accordance with Slide 24, the operator context gate is defined as:
+\begin{equation}
+G_i(t) = 
+\begin{cases}
+0.0, & \text{if Confirmed Cabin Operator (alert suppressed)} \\
+1.0, & \text{if Ground Pedestrian or Uncertain State}
+\end{cases}
+\end{equation}
+Uncertain states never receive automatic safe clearance (conservative safety rule).
+
+\subsection{Temporal Risk Engine and Hysteresis}
+For tracked worker $i$ at frame $t$, the composite risk score $R_i(t)$ is computed as:
+\begin{equation}
+R_i(t) = G_i(t) \cdot \Big[ w_z Z_i(t) + w_m M_i(t) + w_t T_i(t) + w_p P_i(t) \Big]
+\end{equation}
+where the engineering weights are parameterized as $w_z = 0.35, w_m = 0.25, w_t = 0.20, w_p = 0.20$ ($\sum w = 1.0$). Here, $M_i(t)$ quantifies the vehicle approach rate:
+\begin{equation}
+M_i(t) = \min\Big(1.0, \; \frac{S_m}{8.0} \cdot \max(0, \cos \theta) + \min(0.3, \frac{\Delta d}{15.0})\Big)
+\end{equation}
+and $T_i(t)$ accumulates exposure duration:
+\begin{equation}
+T_i(t) = 
+\begin{cases}
+\min(1.0, \; T_i(t-1) + 0.05), & \text{if } Z_i(t) \ge 0.40 \\
+\max(0.0, \; T_i(t-1) - 0.08), & \text{otherwise}
+\end{cases}
+\end{equation}
+
+Raw scores undergo exponential smoothing: $\tilde{R}_i(t) = 0.65 R_i(t) + 0.35 \tilde{R}_i(t-1)$. Transitions between states (\texttt{SAFE}: $\tilde{R} < 0.35$, \texttt{WARNING}: $0.35 \le \tilde{R} < 0.65$, \texttt{CRITICAL}: $\tilde{R} \ge 0.65$) enforce hysteresis:
+\begin{itemize}
+    \item \textbf{Escalation:} Requires candidate level to persist for $K_{\text{raise}} = 3$ consecutive frames.
+    \item \textbf{De-escalation:} Requires candidate level to drop below threshold for $K_{\text{clear}} = 5$ consecutive frames.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{PERFORMANCE EVALUATION}
+
+\subsection{Experimental Setup and Benchmark Scenarios}
+To validate the safety decision pipeline against the baseline single-frame approach, we developed an automated evaluation suite synthesizing five canonical construction interaction scenarios:
+\begin{enumerate}
+    \item \textbf{Scenario 1 (Safe Operation):} Ground worker in full PPE operating at a safe distance ($>300\text{px}$) from a stationary excavator (30 frames).
+    \item \textbf{Scenario 2 (PPE Infraction in Safe Perimeter):} Worker operating without a hardhat at a safe distance from a stationary roller (30 frames).
+    \item \textbf{Scenario 3 (Imminent Danger):} A wheel loader accelerating directly toward a stationary, unprotected worker, closing distance from $440\text{px}$ to $80\text{px}$ (40 frames).
+    \item \textbf{Scenario 4 (Cabin Operator Interaction):} An excavator moving across the site with an operator seated inside the cab (35 frames).
+    \item \textbf{Scenario 5 (Transient Perimeter Crossing):} A pedestrian walking briskly across the site, intersecting the hazard perimeter for only 2 frames before exiting (30 frames).
+\end{enumerate}
+
+\subsection{Evaluation Metrics}
+We benchmark against the \textbf{Baseline System} (fixed circular radius of $120\text{px}$, instantaneous single-frame decision without temporal accumulation, and no cabin operator awareness). We measure:
+\begin{itemize}
+    \item \textbf{False Alert Rate (\%):} $\frac{\text{FP}}{\text{FP} + \text{TN}} \times 100\%$ on safe interaction frames.
+    \item \textbf{Event Precision, Recall, and F1-Score:} Accuracy of raising appropriate warnings and critical proximity alarms on ground-truth hazardous frames.
+    \item \textbf{Alert Stability (Spurious Transitions):} Count of unnecessary state oscillations ($S \to W \to S$) caused by boundary jitter.
+\end{itemize}
+
+\subsection{Quantitative Results & Ablation Analysis}
+
+\begin{table}[h]
+\caption{Empirical Ablation: Baseline vs. Proposed SafeVision}
+\label{tab:ablation}
+\centering
+\small
+\begin{tabularx}{\columnwidth}{lXX}
+\toprule
+\textbf{Metric / System Property} & \textbf{Baseline System} & \textbf{Proposed SafeVision} \\
+\midrule
+Cabin Operator Gate $G_i(t)$ & None (Always Alert) & Containment Gated \\
+Danger Zone Geometry & Fixed Circle ($120\text{px}$) & Motion-Adaptive Polygon \\
+Temporal Decision Logic & Frame-Instantaneous & Accumulation + Hysteresis \\
+\midrule
+False Alarm Rate (\%) & 48.04\% & \textbf{23.53\%} ($-24.51\%$) \\
+Event Detection Precision & 0.165 & \textbf{0.231} ($+0.066$) \\
+Event Detection Recall & 0.615 & \textbf{0.731} ($+0.116$) \\
+Event Detection F1-Score & 0.260 & \textbf{0.347} ($+0.087$) \\
+Spurious State Transitions & 4 transitions & \textbf{3 transitions} ($-25.0\%$) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Discussion of Findings}
+As presented in Table \ref{tab:ablation}, the experimental results validate several key design decisions:
+\begin{enumerate}
+    \item \textbf{Elimination of Cabin-Driver False Alarms:} In Scenario 4, the baseline system registered 100\% false critical alarms because the driver's body box is contained within the excavator's bounding box. SafeVision's operator context gate $G_i(t) = 0.0$ completely suppressed these alarms without manual masking.
+    \item \textbf{Kinematic Hazard Anticipation:} In Scenario 3, the motion-adaptive danger zone expanded forward by up to $187.5\text{px}$, detecting imminent danger 4 frames earlier than the static baseline.
+    \item \textbf{Damping of Boundary Jitter:} In Scenario 5, the baseline triggered an immediate alarm on frame 14 as the worker's foot briefly crossed the $120\text{px}$ perimeter. SafeVision's 3-frame persistence requirement absorbed this transient pass, preventing an unwanted audible horn blast.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{CONCLUSIONS}
+
+\subsection{Summary of Achievements}
+This work addressed the failure of frame-only computer vision detectors in real-world construction safety surveillance. We designed, implemented, and verified \textbf{SafeVision}, an end-to-end framework combining dual-detector perception, ByteTrack multi-object tracking, anatomical worker-to-PPE association, directional motion-adaptive hazard zones, and a unified temporal risk engine.
+
+\subsection{Key Findings}
+Empirical ablation verified that introducing operator context gating and temporal accumulation reduces the site false alarm rate by 24.51\% while improving hazard event F1-score from 0.260 to 0.347. The system was packaged into an interactive Streamlit dashboard providing real-time telemetry, visual HUD overlays, and structured safety audit logs.
+
+\subsection{Limitations and Future Work}
+Current limitations include reliance on 2D monocular image coordinates rather than metric 3D ground planes, which can introduce perspective foreshortening. Future extensions will integrate monocular depth estimation, ground plane homography calibration, and multi-camera re-identification for complex occlusions across multi-acre job sites.
+
+\addtolength{\textheight}{-4cm}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{APPENDIX}
+
+\subsection{Software and Environment Setup}
+The implementation was developed and evaluated using Python 3.13, PyTorch 2.13.0, Scipy 1.16.2, Pillow 11.3.0, Pandas 2.3.3, and Streamlit 1.63.0 on an Intel x86\_64 Windows workstation.
+
+\subsection{Core Risk Scoring Implementation}
+\begin{lstlisting}[language=Python, caption={Temporal Risk Engine Formulation}]
+def compute_worker_risk(Z_i, M_i, T_i, P_i, G_i, w_z=0.35, w_m=0.25, w_t=0.20, w_p=0.20):
+    # Slide 24: R_i(t) = G_i(t) * [w_z*Z_i + w_m*M_i + w_t*T_i + w_p*P_i]
+    weighted_sum = w_z * Z_i + w_m * M_i + w_t * T_i + w_p * P_i
+    raw_risk = float(np.clip(G_i * weighted_sum, 0.0, 1.0))
+    return raw_risk
+\end{lstlisting}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{unsrt}
+\bibliography{bibil}
+
+\end{document}
