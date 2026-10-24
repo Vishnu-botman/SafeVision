@@ -7,6 +7,7 @@ import sys
 import os
 import time
 from typing import Dict, List, Optional
+import cv2
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw
@@ -183,8 +184,9 @@ st.markdown("""
 # ---------------------------------------------------------
 # Main Tabs
 # ---------------------------------------------------------
-tab_demo, tab_ablation, tab_dataset, tab_architecture = st.tabs([
+tab_demo, tab_real_video, tab_ablation, tab_dataset, tab_architecture = st.tabs([
     "🎬 Live Scenario Monitor",
+    "📹 Real-Life Video & CCTV Feed",
     "📊 Baseline vs Proposed Ablation",
     "📂 Dataset Auditor & Explorer",
     "🏗️ System Architecture"
@@ -359,7 +361,147 @@ with tab_demo:
 
 
 # ---------------------------------------------------------
-# TAB 2: Ablation Study & Empirical Metrics
+# TAB 2: Real-Life Video & CCTV Feed
+# ---------------------------------------------------------
+with tab_real_video:
+    st.markdown("### 📹 Real-Life Construction Video & CCTV Feed Inference")
+    st.markdown("""
+    Evaluate **SafeVision** directly on real-world construction video footage using the full neural pipeline:
+    **Model A (YOLOv8 Scene Detector)** + **Model B (Fine-Tuned PPE Detector)** + **ByteTrack Multi-Object Tracking** + **Adaptive Danger Zones** + **Temporal Risk Engine**.
+    """)
+    
+    col_v_ctrl, col_v_info = st.columns([1, 2])
+    
+    with col_v_ctrl:
+        video_source = st.radio(
+            "Choose Video Source:",
+            [
+                "Use Sample Real Construction Clip (sample_construction_clip.mp4)",
+                "Upload Custom Video File (.mp4, .avi, .mov)"
+            ],
+            index=0
+        )
+        
+        video_path = None
+        if video_source == "Use Sample Real Construction Clip (sample_construction_clip.mp4)":
+            if os.path.exists("sample_construction_clip.mp4"):
+                video_path = "sample_construction_clip.mp4"
+            else:
+                st.warning("Sample clip not found on disk.")
+        else:
+            uploaded_file = st.file_uploader("Upload Construction Video Clip", type=["mp4", "avi", "mov", "mkv"])
+            if uploaded_file is not None:
+                temp_path = "temp_uploaded_video.mp4"
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                video_path = temp_path
+
+        max_frames = st.slider("Max Frames to Process", min_value=5, max_value=60, value=20, step=5)
+        frame_stride = st.selectbox(
+            "Frame Stride (Skip rate)",
+            options=[1, 2, 3],
+            index=0,
+            help="Process every 1st, 2nd, or 3rd frame to accelerate inference"
+        )
+        
+        start_processing = st.button("▶️ Run Real-Life Video Inference", type="primary", disabled=(not video_path))
+        
+    with col_v_info:
+        if video_path and os.path.exists(video_path):
+            cap_info = cv2.VideoCapture(video_path)
+            total_f = int(cap_info.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps_v = cap_info.get(cv2.CAP_PROP_FPS) or 25.0
+            w_v = int(cap_info.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h_v = int(cap_info.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap_info.release()
+            st.info(f"**Video Metadata:** File: `{os.path.basename(video_path)}` | Resolution: {w_v}x{h_v} | Total Frames: {total_f} | Native FPS: {fps_v:.1f}")
+        else:
+            st.info("Select or upload a video file to begin real-life surveillance.")
+
+    if start_processing and video_path:
+        pipeline_real = SafeVisionPipeline(config=active_config, use_baseline=False)
+        pipeline_real.reset()
+        
+        cap = cv2.VideoCapture(video_path)
+        frame_idx = 0
+        processed_count = 0
+        
+        p_bar = st.progress(0.0)
+        status_text = st.empty()
+        
+        col_view, col_stats = st.columns([2, 1])
+        
+        with col_view:
+            frame_placeholder = st.empty()
+            
+        with col_stats:
+            stat_workers = st.empty()
+            stat_machines = st.empty()
+            stat_risk = st.empty()
+            stat_events = st.empty()
+
+        while cap.isOpened() and processed_count < max_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            frame_idx += 1
+            if frame_idx % frame_stride != 0:
+                continue
+                
+            processed_count += 1
+            progress_frac = min(1.0, processed_count / max_frames)
+            p_bar.progress(progress_frac)
+            status_text.text(f"Processing Frame {frame_idx} ({processed_count}/{max_frames})...")
+            
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_frame = Image.fromarray(frame_rgb)
+            
+            # Dual detector inference + ByteTrack tracking + Risk scoring
+            out = pipeline_real.process_frame(pil_frame, custom_detections=None, render_annotation=True)
+            
+            # Update viewer
+            frame_placeholder.image(out.annotated_image, caption=f"Frame {frame_idx} Telemetry Stream", use_container_width=True)
+            
+            # Update metrics
+            highest_risk = "SAFE"
+            max_score = 0.0
+            for asm in out.assessments.values():
+                if asm.smoothed_risk_score > max_score:
+                    max_score = asm.smoothed_risk_score
+                    highest_risk = asm.risk_level.value
+                    
+            stat_workers.metric("Tracked Workers", len(out.workers))
+            stat_machines.metric("Active Machinery", len(out.machinery))
+            
+            if highest_risk == "SAFE":
+                stat_risk.markdown("**Current Risk:** <span class='status-badge badge-safe'>SAFE</span>", unsafe_allow_html=True)
+            elif highest_risk == "WARNING":
+                stat_risk.markdown("**Current Risk:** <span class='status-badge badge-warning'>WARNING</span>", unsafe_allow_html=True)
+            else:
+                stat_risk.markdown("**Current Risk:** <span class='status-badge badge-critical'>CRITICAL</span>", unsafe_allow_html=True)
+                
+            stat_events.metric("Logged Incidents", len(pipeline_real.logger.event_records))
+            time.sleep(0.03)
+            
+        cap.release()
+        p_bar.progress(1.0)
+        status_text.success(f"Real-life video processing complete! Analyzed {processed_count} frames.")
+        
+        # Event audit table
+        df_real_events = pipeline_real.logger.to_dataframe()
+        st.markdown("#### 📋 Real-Life Safety Incidents Logged")
+        if not df_real_events.empty:
+            st.dataframe(df_real_events, use_container_width=True)
+            csv_r = df_real_events.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Incident Report (CSV)", csv_r, "real_video_incident_log.csv", "text/csv")
+        else:
+            st.info("No proximity violations or unequipped workers flagged in this footage sequence.")
+
+
+# ---------------------------------------------------------
+# TAB 3: Ablation Study & Empirical Metrics
 # ---------------------------------------------------------
 with tab_ablation:
     st.markdown("### 📊 Empirical Ablation: Proposed SafeVision vs. Baseline System")
