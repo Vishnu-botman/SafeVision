@@ -491,7 +491,7 @@ with tab_real_video:
             else:
                 stat_risk.markdown("**Current Risk:** <span class='status-badge badge-critical'>CRITICAL</span>", unsafe_allow_html=True)
                 
-            stat_events.metric("Logged Incidents", len(pipeline_real.logger.event_records))
+            stat_events.metric("Logged Incidents", len(pipeline_real.logger.events))
             time.sleep(0.03)
             
         cap.release()
